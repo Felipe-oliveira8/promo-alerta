@@ -5,17 +5,21 @@ Uso:
   python main.py --simular      # mostra no terminal o que enviaria (não envia nada)
   python main.py --configurar   # testa o bot e cadastra o menu de comandos
   python main.py --gerar-chave  # cria uma CHAVE_ALERTAS nova
+  python main.py --preco '"5060 ti" 16gb 6m'   # histórico de preço no terminal
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import html
 import json
 import os
 import sys
 from pathlib import Path
 
-from comandos import COMANDOS_MENU, executar
+import historico
+from comandos import COMANDOS_MENU, executar, parse_alerta, separar_periodo
 from estado import Alertas, Posicao
 from filtro import casa
 from fontes import coletar
@@ -46,7 +50,14 @@ def processar_comandos(bot: TelegramBot, posicao: Posicao, alertas: Alertas, cha
         # Segurança: só obedece ao SEU chat. Qualquer outra pessoa é ignorada.
         if str(msg.get("chat", {}).get("id")) != str(chat_id):
             continue
-        resposta, novos = executar(msg.get("text", ""), alertas)
+        try:
+            resposta, novos = executar(
+                msg.get("text", ""),
+                alertas,
+                consultar_preco=lambda alerta, dias: historico.consultar(alerta, dias, alertas.canais),
+            )
+        except Exception as e:  # noqa: BLE001 — um comando com erro não pode travar o robô
+            resposta, novos = f"⚠️ Erro ao executar o comando: {html.escape(str(e))[:300]}", []
         criados.extend(novos)
         if resposta:
             bot.enviar(resposta, preview=False)
@@ -58,12 +69,19 @@ def main() -> int:
     ap.add_argument("--simular", action="store_true")
     ap.add_argument("--configurar", action="store_true")
     ap.add_argument("--gerar-chave", action="store_true")
+    ap.add_argument("--preco", metavar="TERMOS", help='ex.: --preco "\\"5060 ti\\" 16gb 6m"')
     args = ap.parse_args()
 
     if args.gerar_chave:
         from cryptography.fernet import Fernet
 
         print(Fernet.generate_key().decode())
+        return 0
+
+    if args.preco:  # consulta de preço direto no terminal (não usa o Telegram)
+        resto, dias = separar_periodo(args.preco)
+        canais = json.loads((PASTA / "config.json").read_text(encoding="utf-8"))["canais_iniciais"]
+        print(historico.consultar(parse_alerta(resto), dias, canais))
         return 0
 
     carregar_env(PASTA / ".env")
@@ -99,6 +117,15 @@ def main() -> int:
                    "Crie seu primeiro alerta, por exemplo:\n"
                    '<code>/add "air fryer" -forma max 450</code>\n\n'
                    "Mande /ajuda para ver todos os comandos.", preview=False)
+
+    # 0b) Menu de comandos mudou numa atualização do robô → recadastra
+    versao_menu = hashlib.sha1(json.dumps(COMANDOS_MENU).encode()).hexdigest()[:10]
+    if bot and not args.simular and posicao.menu != versao_menu:
+        try:
+            bot.definir_menu(COMANDOS_MENU)
+            posicao.menu = versao_menu
+        except Exception as e:  # noqa: BLE001
+            print("AVISO: não consegui atualizar o menu:", e, file=sys.stderr)
 
     # 1) Comandos que você mandou para o bot
     criados = []
