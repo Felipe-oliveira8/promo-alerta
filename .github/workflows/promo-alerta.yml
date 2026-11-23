@@ -1,0 +1,64 @@
+name: Promo Alerta
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # a cada 10 min (o GitHub pode atrasar alguns minutos)
+  workflow_dispatch:          # botão "Run workflow" para rodar na hora
+
+permissions:
+  contents: write             # para salvar dados/alertas.enc quando você muda alertas
+
+concurrency:
+  group: promo-alerta         # nunca duas rodadas ao mesmo tempo
+  cancel-in-progress: false
+
+jobs:
+  rodar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Restaurar posição de leitura
+        uses: actions/cache/restore@v6
+        with:
+          path: dados/posicao.json
+          key: posicao-${{ github.run_id }}
+          restore-keys: posicao-
+
+      - name: Rodar
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CHAVE_ALERTAS: ${{ secrets.CHAVE_ALERTAS }}
+        run: |
+          if [ -z "$CHAVE_ALERTAS" ]; then
+            echo "::error::Falta o secret CHAVE_ALERTAS (veja o README)."; exit 1
+          fi
+          python main.py
+
+      - name: Salvar alertas (só se mudaram)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dados/alertas.enc
+          if git diff --cached --quiet; then
+            echo "Alertas sem mudança."
+          else
+            git commit -m "Atualiza alertas (criptografado)"
+            git pull --rebase
+            git push
+          fi
+
+      - name: Guardar posição de leitura
+        uses: actions/cache/save@v6
+        with:
+          path: dados/posicao.json
+          key: posicao-${{ github.run_id }}-${{ github.run_attempt }}
