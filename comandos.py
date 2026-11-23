@@ -23,7 +23,8 @@ AJUDA = """<b>Promo Alerta</b> — comandos
   Ex.: <code>/add "air fryer" mondial|philco -forma -capa max 450</code>
 
 <b>/lista</b> — mostra seus alertas
-<b>/remover</b> N — apaga o alerta N
+<b>/remover</b> N — apaga o alerta N (ou vários: <code>/remover 2 3 4</code>)
+<b>/remover tudo</b> — apaga todos (pede confirmação)
 <b>/pausar</b> N · <b>/ativar</b> N — pausa/retoma o alerta N
 
 <b>/preco</b> N período — valor justo e histórico de preço do alerta N
@@ -38,7 +39,7 @@ Respostas chegam na próxima rodada (até ~10 min)."""
 COMANDOS_MENU = [
     ("add", "Criar alerta: /add \"air fryer\" -forma max 400"),
     ("lista", "Ver meus alertas"),
-    ("remover", "Apagar alerta: /remover N"),
+    ("remover", "Apagar: /remover N, /remover 2 3, /remover tudo"),
     ("pausar", "Pausar alerta: /pausar N"),
     ("ativar", "Reativar alerta: /ativar N"),
     ("preco", "Valor justo e histórico: /preco N 6m"),
@@ -162,6 +163,29 @@ def executar(texto: str, alertas: Alertas, consultar_preco=None) -> tuple[str | 
         if not alertas.alertas:
             return "Você ainda não tem alertas. Crie um com /add.", []
         return "Seus alertas:\n\n" + "\n".join(descrever(a) for a in alertas.alertas), []
+
+    if cmd == "remover" and arg.lower().split()[:1] in (["tudo"], ["todos"]):
+        total = len(alertas.alertas)
+        if not total:
+            return "Você não tem alertas para apagar.", []
+        if arg.lower().split()[1:2] != ["sim"]:
+            return (f"⚠️ Isso apaga <b>todos os {total} alertas</b> e não dá para desfazer.\n"
+                    "Para confirmar, mande: <code>/remover tudo sim</code>"), []
+        for a in list(alertas.alertas):
+            alertas.remover(a["id"])
+        return f"🗑️ Pronto: {total} alerta(s) apagado(s). Crie novos com /add.", []
+
+    if cmd == "remover" and len(arg.replace(",", " ").split()) > 1:
+        numeros = [_numero(p) for p in arg.replace(",", " ").split()]
+        if None in numeros:
+            return "Uso: <code>/remover 2 3 4</code> (números de /lista) ou <code>/remover tudo</code>", []
+        apagados = [n for n in numeros if alertas.remover(n)]
+        faltando = [n for n in numeros if n not in apagados]
+        txt = (f"🗑️ Apagados: {', '.join('#' + str(n) for n in apagados)}." if apagados
+               else "Nenhum alerta apagado.")
+        if faltando:
+            txt += f"\nNão achei: {', '.join('#' + str(n) for n in faltando)}."
+        return txt, []
 
     if cmd in ("remover", "pausar", "ativar"):
         n = _numero(arg)
