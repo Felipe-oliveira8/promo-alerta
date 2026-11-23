@@ -132,12 +132,14 @@ class Posicao:
         self.ultimo: dict[str, int] = dados.get("ultimo", {})
         self.falhas: dict[str, int] = dados.get("falhas", {})
         self.update_offset: int = dados.get("update_offset", 0)
+        self.menu: str = dados.get("menu", "")  # versão do menu de comandos já cadastrada
 
     def salvar(self):
         _gravar_atomico(
             self.caminho,
             json.dumps(
-                {"ultimo": self.ultimo, "falhas": self.falhas, "update_offset": self.update_offset},
+                {"ultimo": self.ultimo, "falhas": self.falhas,
+                 "update_offset": self.update_offset, "menu": self.menu},
                 indent=1,
             ).encode("utf-8"),
         )
