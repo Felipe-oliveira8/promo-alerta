@@ -26,6 +26,10 @@ AJUDA = """<b>Promo Alerta</b> — comandos
 <b>/remover</b> N — apaga o alerta N
 <b>/pausar</b> N · <b>/ativar</b> N — pausa/retoma o alerta N
 
+<b>/preco</b> N período — valor justo e histórico de preço do alerta N
+  • período: <code>30d</code>, <code>3m</code>, <code>6m</code>, <code>1a</code> (padrão: 3m)
+  Ex.: <code>/preco 1 6m</code> ou <code>/preco "5060 ti" 16gb 1a</code>
+
 <b>/canais</b> — canais monitorados
 <b>/addcanal</b> @canal · <b>/rmcanal</b> @canal
 
@@ -37,6 +41,7 @@ COMANDOS_MENU = [
     ("remover", "Apagar alerta: /remover N"),
     ("pausar", "Pausar alerta: /pausar N"),
     ("ativar", "Reativar alerta: /ativar N"),
+    ("preco", "Valor justo e histórico: /preco N 6m"),
     ("canais", "Ver canais monitorados"),
     ("addcanal", "Monitorar canal: /addcanal @canal"),
     ("rmcanal", "Parar de monitorar: /rmcanal @canal"),
@@ -108,8 +113,28 @@ def _numero(arg: str) -> int | None:
     return int(arg) if arg.isdigit() else None
 
 
-def executar(texto: str, alertas: Alertas) -> tuple[str | None, list[dict]]:
-    """Executa um comando. Devolve (resposta, alertas_criados_agora)."""
+PERIODO_PADRAO = 90
+
+
+def separar_periodo(arg: str) -> tuple[str, int]:
+    """'1 6m' → ('1', 180); '"5060 ti" 16gb 1 ano' → ('"5060 ti" 16gb', 365)."""
+    from historico import parse_periodo
+
+    partes = arg.split()
+    if len(partes) >= 1:
+        dias = parse_periodo(partes[-1])
+        if dias:
+            return " ".join(partes[:-1]), dias
+    if len(partes) >= 2:
+        dias = parse_periodo(partes[-2] + partes[-1])  # "1 ano", "6 meses"
+        if dias:
+            return " ".join(partes[:-2]), dias
+    return arg, PERIODO_PADRAO
+
+
+def executar(texto: str, alertas: Alertas, consultar_preco=None) -> tuple[str | None, list[dict]]:
+    """Executa um comando. Devolve (resposta, alertas_criados_agora).
+    consultar_preco(alerta, dias) -> str é usado pelo /preco."""
     texto = texto.strip()
     if not texto.startswith("/"):
         return "Não entendi. Mande /ajuda para ver os comandos.", []
@@ -149,6 +174,24 @@ def executar(texto: str, alertas: Alertas) -> tuple[str | None, list[dict]]:
         if not a:
             return f"Não achei o alerta #{n}.", []
         return ("▶️ " if cmd == "ativar" else "⏸️ ") + descrever(a), []
+
+    if cmd in ("preco", "preço", "precos"):
+        resto, dias = separar_periodo(arg)
+        if not resto:
+            return 'Uso: <code>/preco N 6m</code> (N de /lista) ou <code>/preco "5060 ti" 16gb 1a</code>', []
+        n = _numero(resto)
+        if n is not None and " " not in resto.strip():
+            alerta = alertas.buscar(n)
+            if not alerta:
+                return f"Não achei o alerta #{n}. Veja os números em /lista.", []
+        else:
+            try:
+                alerta = parse_alerta(resto)
+            except ValueError as e:
+                return f"Não entendi o produto: {html.escape(str(e))}.", []
+        if consultar_preco is None:
+            return "Consulta de preços indisponível agora.", []
+        return consultar_preco(alerta, dias), []
 
     if cmd == "canais":
         if not alertas.canais:
