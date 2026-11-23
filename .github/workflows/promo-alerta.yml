@@ -15,7 +15,7 @@ concurrency:
 jobs:
   rodar:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10        # /preco de 1 ano pode levar ~2 min
     steps:
       - uses: actions/checkout@v7
 
