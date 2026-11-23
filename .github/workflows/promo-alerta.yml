@@ -2,7 +2,9 @@ name: Promo Alerta
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # a cada 10 min (o GitHub pode atrasar alguns minutos)
+    # a cada 10 min, fugindo dos minutos "redondos" (:00, :10...), que o GitHub
+    # avisa serem os mais congestionados; mesmo assim pode haver atrasos.
+    - cron: "4-59/10 * * * *"
   workflow_dispatch:          # botão "Run workflow" para rodar na hora
 
 permissions:
