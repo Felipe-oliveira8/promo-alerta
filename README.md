@@ -63,6 +63,8 @@ A partir daí ele roda sozinho a cada 10 minutos.
 | `/lista` | mostra seus alertas numerados |
 | `/remover 2` | apaga o alerta 2 |
 | `/pausar 2` · `/ativar 2` | pausa / retoma |
+| `/preco 2 6m` | valor justo e histórico de preço do alerta 2 (`30d`, `3m`, `6m`, `1a`) |
+| `/preco "5060 ti" 16gb 1a` | o mesmo, para qualquer produto (sem criar alerta) |
 | `/canais` | canais monitorados |
 | `/addcanal @canal` · `/rmcanal @canal` | muda os canais |
 | `/ajuda` | lista de comandos |
@@ -73,7 +75,16 @@ A partir daí ele roda sozinho a cada 10 minutos.
 - `a|b|c` → pelo menos uma delas (`mondial|philco|electrolux`)
 - `-palavra` → não pode aparecer (`-capa -pelicula`)
 - `max 400` (ou `ate 400`, `<=400`) → só se tiver preço até R$ 400
-- Maiúsculas e acentos não importam.
+- Maiúsculas, acentos, hífens e espaços entre letras e números não importam:
+  `"5060 ti"` também pega "RTX5060Ti", "5060-Ti" e "5060TI"; `16gb` pega "16 GB".
+
+**Como o /preco calcula**
+Busca as ofertas antigas do produto nos canais monitorados e mostra:
+valor justo (mediana: metade das promoções saiu abaixo disso), bom preço
+(o valor das 25% mais baratas), mínimo, média, máximo, última oferta e a mediana
+de cada mês. São preços de **promoções postadas nos canais**, não o preço normal
+de loja. Parcelas, cupons e valores fora da curva são descartados, e a mesma oferta
+postada em dois canais no mesmo dia conta uma vez só.
 
 Ao criar um alerta, ele também confere as postagens que já estão nos canais e
 manda até 5 resultados recentes, para você ver na hora se o filtro está bom.
